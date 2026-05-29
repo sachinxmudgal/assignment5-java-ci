@@ -65,13 +65,11 @@ pipeline {
                 stage('Code Coverage') {
 
                     when {
-                        expression {
-                            params.RUN_COVERAGE
-                        }
+                        expression { params.RUN_COVERAGE }
                     }
 
                     steps {
-                        sh 'mvn test'
+                        sh 'mvn clean test jacoco:report'
                     }
                 }
             }
@@ -82,7 +80,7 @@ pipeline {
             steps {
 
 		publishHTML(target: [
-    		    allowMissing: false,
+    		    allowMissing: true,
     		    alwaysLinkToLastBuild: true,
     		    keepAll: true,
     		    reportDir: 'target/site/jacoco',
