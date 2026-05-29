@@ -45,7 +45,7 @@ pipeline {
                     }
 
                     steps {
-                        sh 'mvn clean compile'
+                        sh 'mvn compile'
                     }
                 }
 
@@ -69,7 +69,7 @@ pipeline {
                     }
 
                     steps {
-                        sh 'mvn clean test jacoco:report'
+                        sh 'mvn test'
                     }
                 }
             }
