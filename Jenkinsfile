@@ -81,11 +81,14 @@ pipeline {
 
             steps {
 
-                publishHTML([
-                    reportDir: 'target/site/jacoco',
-                    reportFiles: 'index.html',
-                    reportName: 'JaCoCo Coverage Report'
-                ])
+		publishHTML(target: [
+    		    allowMissing: false,
+    		    alwaysLinkToLastBuild: true,
+    		    keepAll: true,
+    		    reportDir: 'target/site/jacoco',
+    		    reportFiles: 'index.html',
+    		    reportName: 'JaCoCo Coverage Report'
+		])
             }
         }
 
