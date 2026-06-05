@@ -1,128 +1,254 @@
 pipeline {
 
-    agent any
+```
+agent any
 
-    parameters {
+parameters {
 
-        booleanParam(
-            name: 'RUN_STABILITY',
-            defaultValue: true,
-            description: 'Run stability scan'
-        )
+    booleanParam(
+        name: 'RUN_STABILITY',
+        defaultValue: true,
+        description: 'Run Dependency/Stability Scan'
+    )
 
-        booleanParam(
-            name: 'RUN_QUALITY',
-            defaultValue: true,
-            description: 'Run quality scan'
-        )
+    booleanParam(
+        name: 'RUN_QUALITY',
+        defaultValue: true,
+        description: 'Run Checkstyle Analysis'
+    )
 
-        booleanParam(
-            name: 'RUN_COVERAGE',
-            defaultValue: true,
-            description: 'Run coverage scan'
-        )
+    booleanParam(
+        name: 'RUN_COVERAGE',
+        defaultValue: true,
+        description: 'Run JaCoCo Coverage Analysis'
+    )
+}
+
+environment {
+    EMAIL_TO = 'sachin1420sm@gmail.com'
+    SLACK_CHANNEL = '#jenkins-alerts'
+}
+
+stages {
+
+    stage('Checkout') {
+        steps {
+            checkout scm
+        }
     }
 
-    stages {
+    stage('Parallel Scans') {
 
-        stage('Checkout') {
+        parallel {
 
-            steps {
-                checkout scm
-            }
-        }
+            stage('Code Stability Analysis') {
 
-        stage('Parallel Scans') {
-
-            parallel {
-
-                stage('Code Stability') {
-
-                    when {
-                        expression {
-                            params.RUN_STABILITY
-                        }
-                    }
-
-                    steps {
-                        sh 'mvn compile'
-                    }
+                when {
+                    expression { params.RUN_STABILITY }
                 }
 
-                stage('Code Quality') {
+                steps {
 
-                    when {
-                        expression {
-                            params.RUN_QUALITY
-                        }
-                    }
+                    echo "Running Dependency Check..."
 
-                    steps {
-                        sh 'mvn checkstyle:checkstyle'
-                    }
-                }
-
-                stage('Code Coverage') {
-
-                    when {
-                        expression { params.RUN_COVERAGE }
-                    }
-
-                    steps {
-                        sh 'mvn test'
-                    }
+                    sh '''
+                    mvn org.owasp:dependency-check-maven:check
+                    '''
                 }
             }
-        }
 
-        stage('Publish Reports') {
+            stage('Code Quality Analysis') {
 
-            steps {
+                when {
+                    expression { params.RUN_QUALITY }
+                }
 
-		publishHTML(target: [
-    		    allowMissing: true,
-    		    alwaysLinkToLastBuild: true,
-    		    keepAll: true,
-    		    reportDir: 'target/site/jacoco',
-    		    reportFiles: 'index.html',
-    		    reportName: 'JaCoCo Coverage Report'
-		])
+                steps {
+
+                    echo "Running Checkstyle..."
+
+                    sh '''
+                    mvn checkstyle:checkstyle
+                    '''
+                }
             }
-        }
 
-        stage('Approval') {
+            stage('Code Coverage Analysis') {
 
-            steps {
+                when {
+                    expression { params.RUN_COVERAGE }
+                }
 
-                input(
-                    message: 'Approve Artifact Publication?',
-                    ok: 'Publish'
-                )
-            }
-        }
+                steps {
 
-        stage('Publish Artifact') {
+                    echo "Running JaCoCo Coverage..."
 
-            steps {
-
-                sh 'mvn package'
-
-                archiveArtifacts(
-                    artifacts: 'target/*.jar',
-                    fingerprint: true
-                )
+                    sh '''
+                    mvn clean test jacoco:report
+                    '''
+                }
             }
         }
     }
 
-    post {
+    stage('Publish Reports') {
 
-        success {
-            echo 'Build Successful'
-        }
+        steps {
 
-        failure {
-            echo 'Build Failed'
+            publishHTML(target: [
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'target/site/jacoco',
+                reportFiles: 'index.html',
+                reportName: 'JaCoCo Coverage Report'
+            ])
+
+            publishHTML(target: [
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'target/site',
+                reportFiles: 'checkstyle.html',
+                reportName: 'Checkstyle Report'
+            ])
+
+            publishHTML(target: [
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'target',
+                reportFiles: 'dependency-check-report.html',
+                reportName: 'Dependency Check Report'
+            ])
         }
     }
+
+    stage('Approval') {
+
+        steps {
+
+            input(
+                message: 'Approve Artifact Publication?',
+                ok: 'Publish'
+            )
+        }
+    }
+
+    stage('Publish Artifact') {
+
+        steps {
+
+            sh 'mvn clean package'
+
+            archiveArtifacts(
+                artifacts: 'target/*.jar',
+                fingerprint: true
+            )
+
+            echo 'Artifact Published Successfully'
+        }
+    }
+}
+
+post {
+
+    success {
+
+        emailext(
+            to: "${EMAIL_TO}",
+            subject: "SUCCESS : ${JOB_NAME} #${BUILD_NUMBER}",
+            body: """
+```
+
+Build Successful
+
+Job Name: ${JOB_NAME}
+Build Number: ${BUILD_NUMBER}
+
+Build URL:
+${BUILD_URL}
+"""
+)
+
+```
+        slackSend(
+            channel: "${SLACK_CHANNEL}",
+            message: """
+```
+
+SUCCESS : ${JOB_NAME}
+Build #${BUILD_NUMBER}
+
+${BUILD_URL}
+"""
+)
+}
+
+```
+    failure {
+
+        emailext(
+            to: "${EMAIL_TO}",
+            subject: "FAILED : ${JOB_NAME} #${BUILD_NUMBER}",
+            body: """
+```
+
+Build Failed
+
+Job Name: ${JOB_NAME}
+Build Number: ${BUILD_NUMBER}
+
+Build URL:
+${BUILD_URL}
+"""
+)
+
+```
+        slackSend(
+            channel: "${SLACK_CHANNEL}",
+            message: """
+```
+
+FAILED : ${JOB_NAME}
+Build #${BUILD_NUMBER}
+
+${BUILD_URL}
+"""
+)
+}
+
+```
+    aborted {
+
+        emailext(
+            to: "${EMAIL_TO}",
+            subject: "ABORTED : ${JOB_NAME} #${BUILD_NUMBER}",
+            body: """
+```
+
+Artifact publication was rejected.
+
+Job Name: ${JOB_NAME}
+Build Number: ${BUILD_NUMBER}
+
+Build URL:
+${BUILD_URL}
+"""
+)
+
+```
+        slackSend(
+            channel: "${SLACK_CHANNEL}",
+            message: """
+```
+
+ABORTED : ${JOB_NAME}
+Publication was rejected.
+
+${BUILD_URL}
+"""
+)
+}
+}
 }
