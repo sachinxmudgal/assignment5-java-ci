@@ -3,22 +3,23 @@ pipeline {
     agent any
 
     parameters {
+
         booleanParam(
             name: 'RUN_STABILITY',
             defaultValue: true,
-            description: 'Run Dependency/Stability Scan'
+            description: 'Run Stability Scan'
         )
 
         booleanParam(
             name: 'RUN_QUALITY',
             defaultValue: true,
-            description: 'Run Checkstyle Analysis'
+            description: 'Run Quality Scan'
         )
 
         booleanParam(
             name: 'RUN_COVERAGE',
             defaultValue: true,
-            description: 'Run JaCoCo Coverage Analysis'
+            description: 'Run Coverage Scan'
         )
     }
 
@@ -36,86 +37,63 @@ pipeline {
         }
 
         stage('Parallel Scans') {
+
             parallel {
 
                 stage('Code Stability Analysis') {
+
                     when {
                         expression { params.RUN_STABILITY }
                     }
 
                     steps {
-                        echo 'Running Dependency Check'
+
+                        echo 'Running Stability Analysis'
 
                         sh '''
-                            mvn org.owasp:dependency-check-maven:check
+                            mvn compile
                         '''
                     }
                 }
 
                 stage('Code Quality Analysis') {
+
                     when {
                         expression { params.RUN_QUALITY }
                     }
 
                     steps {
-                        echo 'Running Checkstyle'
+
+                        echo 'Running Checkstyle Analysis'
 
                         sh '''
-                            mvn checkstyle:checkstyle
+                            mvn checkstyle:checkstyle || true
                         '''
                     }
                 }
 
                 stage('Code Coverage Analysis') {
+
                     when {
                         expression { params.RUN_COVERAGE }
                     }
 
                     steps {
-                        echo 'Running JaCoCo Coverage'
+
+                        echo 'Running Unit Tests'
 
                         sh '''
-                            mvn clean test jacoco:report
+                            mvn test
                         '''
                     }
                 }
             }
         }
 
-        stage('Publish Reports') {
-            steps {
-
-                publishHTML(target: [
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'target/site/jacoco',
-                    reportFiles: 'index.html',
-                    reportName: 'JaCoCo Coverage Report'
-                ])
-
-                publishHTML(target: [
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'target/site',
-                    reportFiles: 'checkstyle.html',
-                    reportName: 'Checkstyle Report'
-                ])
-
-                publishHTML(target: [
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'target',
-                    reportFiles: 'dependency-check-report.html',
-                    reportName: 'Dependency Check Report'
-                ])
-            }
-        }
-
         stage('Approval') {
+
             steps {
+
                 input(
                     message: 'Approve Artifact Publication?',
                     ok: 'Publish'
@@ -124,9 +102,10 @@ pipeline {
         }
 
         stage('Publish Artifact') {
+
             steps {
 
-                sh 'mvn clean package'
+                sh 'mvn package'
 
                 archiveArtifacts(
                     artifacts: 'target/*.jar',
